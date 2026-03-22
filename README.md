@@ -6,13 +6,13 @@ A new Flutter project.
 
 # How you can install it?
 
- git clone https://github.com/arcnosixta/Ble_Scale
+ #git clone https://github.com/arcnosixta/Ble_Scale
 
- cd Ble_Scale
+ #cd Ble_Scale
 
- flutter pub get
+ #flutter pub get
 
- lutter run
+ #futter run
 
 A few resources to get you started if this is your first Flutter project:
 
