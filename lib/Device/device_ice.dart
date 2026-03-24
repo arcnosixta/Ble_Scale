@@ -1,5 +1,5 @@
 import 'dart:async';
-
+import 'package:ble_scale_app/ui/theme.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -334,36 +334,87 @@ class _DeviceIceState extends State<DeviceIce> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Ice')),
+      backgroundColor: bgColor,
+      appBar: AppBar(
+        title: const Text("Ice Scale"),
+        backgroundColor: Colors.black,
+        elevation: 0,
+      ),
       body: Column(
         children: [
+
+          const SizedBox(height: 20),
+
+          // ⚖️ ВЕС (главный блок)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(25),
+              gradient: LinearGradient(
+                colors: [primary, accent],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: accent.withOpacity(0.4),
+                  blurRadius: 30,
+                )
+              ],
+            ),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(
-                  '${_connectionStatus == PPDeviceConnectionState.connected ? ' connected' : ' disconnect'}',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                const Text(
+                  "Weight",
+                  style: TextStyle(color: Colors.white70),
                 ),
-                const SizedBox(height: 4),
+
+                const SizedBox(height: 10),
+
+                // 🔥 АНИМАЦИЯ ВЕСА
+                TweenAnimationBuilder(
+                  tween: Tween(begin: 0.0, end: _weightValue ?? 0),
+                  duration: const Duration(milliseconds: 500),
+                  builder: (_, value, __) {
+                    return Text(
+                      "${value.toStringAsFixed(1)} kg",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 48,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 10),
+
                 Text(
-                  'weight: $_weightValue KG    $_measurementStateStr',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  _connectionStatus == PPDeviceConnectionState.connected
+                      ? "Connected"
+                      : "Disconnected",
+                  style: const TextStyle(color: Colors.white70),
+                ),
+
+                const SizedBox(height: 4),
+
+                Text(
+                  _measurementStateStr,
+                  style: const TextStyle(color: Colors.white70),
                 ),
               ],
             ),
           ),
+
+          const SizedBox(height: 20),
+
+          // 📊 ДАННЫЕ (вместо длинного текста)
           Expanded(
-            flex: 1,
             child: Container(
-              width: MediaQuery.of(context).size.width - 16,
-              padding: const EdgeInsets.all(8),
-              margin: const EdgeInsets.all(8),
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
-                borderRadius: BorderRadius.circular(8),
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(20),
               ),
               child: Scrollbar(
                 controller: _scrollController,
@@ -371,47 +422,64 @@ class _DeviceIceState extends State<DeviceIce> {
                   controller: _scrollController,
                   child: Text(
                     _dynamicText,
-                    style: const TextStyle(fontSize: 16),
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
 
+          const SizedBox(height: 10),
 
+          // ⚙️ КНОПКИ (grid)
           Expanded(
-            flex: 1,
             child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              margin: const EdgeInsets.all(8),
-              child: Scrollbar(
+              margin: const EdgeInsets.all(16),
+              child: GridView.builder(
                 controller: _gridController,
-                child: GridView.builder(
-                  controller: _gridController,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    childAspectRatio: 1,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                  ),
-                  itemCount: _gridItems.length,
-                  itemBuilder: (context, index) {
-                    return GridActionItem(
-                      item: _gridItems[index],
-                      onTap: () async {
-
-                        final model = _gridItems[index];
-                        final title = model.title;
-                        _handle(title);
-
-                      },
-                    );
-                  },
+                gridDelegate:
+                const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2, // 🔥 было 4 → стало удобнее
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
                 ),
+                itemCount: _gridItems.length,
+                itemBuilder: (context, index) {
+                  final model = _gridItems[index];
+
+                  return GestureDetector(
+                    onTap: () {
+                      _handle(model.title);
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        color: Colors.white.withOpacity(0.05),
+                        border: Border.all(
+                          color: accent.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.settings, color: accent),
+                          const SizedBox(height: 10),
+                          Text(
+                            model.title,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ),

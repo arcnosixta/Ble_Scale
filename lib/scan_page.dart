@@ -16,6 +16,11 @@ import 'package:pp_bluetooth_kit_flutter/enums/pp_scale_enums.dart';
 import 'package:pp_bluetooth_kit_flutter/model/pp_device_model.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'ui/theme.dart';
+import 'ui/widgets/device_card.dart';
+import 'ui/widgets/glow_button.dart';
+
+
 class ScanPage extends StatefulWidget {
   const ScanPage({super.key, required this.title});
 
@@ -208,49 +213,124 @@ class _ScanPageState extends State<ScanPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: bgColor,
       appBar: AppBar(
         title: Text(widget.title),
+        backgroundColor: Colors.black,
+        elevation: 0,
       ),
       body: _scanResults.isEmpty
           ? Center(
-              child: Text(
-                _isScanning ? "Идет поиск устройств..." : "Устройства не найдены или Bluetooth выключен",
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16, color: Colors.grey),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.bluetooth_searching,
+              size: 60,
+              color: accent.withOpacity(0.7),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              _isScanning
+                  ? "Сканирование устройств..."
+                  : "Устройства не найдены\nили Bluetooth выключен",
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 16,
+                color: Colors.white70,
               ),
-            )
+            ),
+            const SizedBox(height: 20),
+            if (_isScanning)
+              CircularProgressIndicator(color: accent),
+          ],
+        ),
+      )
           : ListView.builder(
-              itemCount: _scanResults.length,
-              itemBuilder: (context, index) {
-                final device = _scanResults[index];
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        itemCount: _scanResults.length,
+        itemBuilder: (context, index) {
+          final device = _scanResults[index];
 
-                return InkWell(
-                  onTap: () {
-                    _handleDeviceTap(device, index);
-                  },
-                  borderRadius: BorderRadius.circular(12),
-                  child: Card(
-                    margin: const EdgeInsets.all(8.0),
-                    elevation: 4.0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Name: ${device.deviceName}\t\tRSSI: ${device.rssi}\nMac: ${device.deviceMac}\nSetting ID: ${device.deviceSettingId}\nAdv Length: ${device.advLength}\t\tSign: ${device.sign}\nPeripheral Type: ${device.getDevicePeripheralType()}',
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        ],
+          return GestureDetector(
+            onTap: () {
+              _handleDeviceTap(device, index);
+            },
+            child: Container(
+              margin:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: accent.withOpacity(0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  // Иконка
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [primary, accent],
                       ),
                     ),
+                    child: const Icon(
+                      Icons.scale,
+                      color: Colors.white,
+                    ),
                   ),
-                );
-              },
+
+                  const SizedBox(width: 15),
+
+                  // Инфа
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          (device.deviceName != null && device.deviceName.toString().isNotEmpty)
+                              ? device.deviceName.toString()
+                              : "Unknown Device",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          "RSSI: ${device.rssi}",
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.6),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          device.deviceMac?.toString() ?? "No MAC",
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.4),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const Icon(
+                    Icons.arrow_forward_ios,
+                    color: Colors.white38,
+                    size: 16,
+                  ),
+                ],
+              ),
             ),
+          );
+        },
+      ),
       floatingActionButton: _buildScanButton(context),
     );
   }
