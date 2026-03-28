@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:ble_scale_app/ui/theme.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:ble_scale_app/Common/Define.dart';
@@ -22,16 +21,14 @@ class DeviceIce extends StatefulWidget {
 }
 
 class _DeviceIceState extends State<DeviceIce> {
-
   final ScrollController _gridController = ScrollController();
-  final ScrollController _scrollController = ScrollController();
-  String _dynamicText = '';
+  dynamic _bodyData;
   PPUnitType _unit = PPUnitType.Unit_KG;
-  PPDeviceConnectionState _connectionStatus = PPDeviceConnectionState.disconnected;
+  PPDeviceConnectionState _connectionStatus =
+      PPDeviceConnectionState.disconnected;
   double _weightValue = 0;
   String _measurementStateStr = '';
   Timer? _timer;
-  int _selectedIndex = 0;
 
   final List<GridItem> _gridItems = [
     GridItem(DeviceMenuType.syncTime.value),
@@ -54,15 +51,10 @@ class _DeviceIceState extends State<DeviceIce> {
 
   @override
   void initState() {
-
-
     final ppDevice = widget.device;
     PPBluetoothKitManager.connectDevice(ppDevice, callBack: (state) {
-      _updateText('connection status：$state');
-
-      // After the connection is successful, keep alive instructions are sent regularly to keep the device connected for a long time
       _timer?.cancel();
-      _timer = Timer.periodic(Duration(seconds: 10), (timer) {
+      _timer = Timer.periodic(const Duration(seconds: 10), (timer) {
         PPPeripheralIce.keepAlive();
       });
 
@@ -72,193 +64,144 @@ class _DeviceIceState extends State<DeviceIce> {
       }
     });
 
-    // Listen to the measurement data, only the last one of the multiple listeners will take effect, it is recommended that the app registers only one globally.
-    PPBluetoothKitManager.addMeasurementListener(callBack: (measurementState, dataModel, device) {
-      _weightValue = dataModel.weight / 100.0;
+    PPBluetoothKitManager.addMeasurementListener(
+        callBack: (measurementState, dataModel, device) {
+          _weightValue = dataModel.weight / 100.0;
 
-      final msg = 'weight:$_weightValue measurementState:$measurementState dataModel:${dataModel.toJson()}';
-      print(msg);
+          print(
+              'weight:$_weightValue measurementState:$measurementState dataModel:${dataModel.toJson()}');
 
-      switch (measurementState) {
-        case PPMeasurementDataState.completed:
-          _measurementStateStr = 'state:completed';
-          _updateText(msg);
-          break;
-        case PPMeasurementDataState.measuringHeartRate:
-          _measurementStateStr = 'state:measuringHeartRate';
-          break;
-        case PPMeasurementDataState.measuringBodyFat:
-          _measurementStateStr = 'state:measuringBodyFat';
-          break;
-        default:
-          _measurementStateStr = 'state:processData';
-          break;
-      }
+          switch (measurementState) {
+            case PPMeasurementDataState.completed:
+              _measurementStateStr = 'state:completed';
+              // ALWAYS assign dataModel to _bodyData
+              _bodyData = dataModel;
+              break;
+            case PPMeasurementDataState.measuringHeartRate:
+              _measurementStateStr = 'state:measuringHeartRate';
+              break;
+            case PPMeasurementDataState.measuringBodyFat:
+              _measurementStateStr = 'state:measuringBodyFat';
+              break;
+            default:
+              _measurementStateStr = 'state:processData';
+              break;
+          }
 
-      if (mounted) {
-        setState(() {});
-      }
-    });
-
-    _scrollController.addListener(() {});
+          if (mounted) {
+            setState(() {});
+          }
+        });
 
     super.initState();
   }
 
+  /// Safely extracts value from body data using JSON keys
+  dynamic _getValue(String key) {
+    if (_bodyData == null) return null;
+    try {
+      final json = _bodyData.toJson();
+      return json[key];
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<void> _handle(String title) async {
     if (_connectionStatus != PPDeviceConnectionState.connected) {
-      _updateText('Device Disconnect');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Device Disconnect')),
+      );
       return;
     }
 
     try {
-
       if (title == DeviceMenuType.syncTime.value) {
-        _updateText('syncTime');
-
-        final ret = await PPPeripheralIce.syncTime();
-
-        _updateText('syncTime-return:$ret');
-
+        await PPPeripheralIce.syncTime();
       }
       if (title == DeviceMenuType.changeUnit.value) {
-        _updateText('syncUnit:$_unit');
-        _unit = _unit == PPUnitType.Unit_KG ? PPUnitType.Unit_LB : PPUnitType.Unit_KG;
+        _unit = _unit == PPUnitType.Unit_KG
+            ? PPUnitType.Unit_LB
+            : PPUnitType.Unit_KG;
         await PPPeripheralIce.syncUnit(_unit);
-
       }
       if (title == DeviceMenuType.fetchHistory.value) {
-        _updateText('fetchHistoryData');
-        PPPeripheralIce.fetchHistoryData(callBack: (dataList, isSuccess){
-          _updateText('History data count:${dataList.length} ');
-
-          dataList.forEach((element) {
-            _updateText('weight:${element.getPpWeightKg()} impedance:${element.z20KhzLeftArmEnCode} ');
-          });
-
-          print('fetchHistoryData History data:${dataList.toString()}');
-
-          if (isSuccess && dataList.length > 0) {
-            _updateText('Perform deletion of historical data:deleteHistoryData');
+        PPPeripheralIce.fetchHistoryData(callBack: (dataList, isSuccess) {
+          if (isSuccess && dataList.isNotEmpty) {
             PPPeripheralIce.deleteHistoryData();
           }
-
-          for (PPBodyBaseModel model in dataList) {
-            print('history weight:${model.weight} isSuccess:$isSuccess');
-          }
-
         });
-
       }
       if (title == DeviceMenuType.getPower.value) {
-        _updateText('fetchBatteryInfo');
-        PPPeripheralIce.fetchBatteryInfo(continuity: true, callBack: (power) {
-          _updateText('power:$power');
-        });
-
+        PPPeripheralIce.fetchBatteryInfo(
+            continuity: true,
+            callBack: (power) {
+              print('power:$power');
+            });
       }
       if (title == DeviceMenuType.configNetwork.value) {
-
         _showWifiInputDialog(context, (ssid, password) async {
-          _updateText('configWifi');
-          _updateText('ssid:$ssid password:$password');
-          _updateText('Please wait...');
-
-          // ‘domain’ needs to use the domain name configured by your server
-          PPWifiResult result = await PPPeripheralIce.configWifi(domain: "http://120.79.144.170:6032", ssId: ssid, password: password);
-          _updateText('Distribution network results:${result.success}');
+          PPWifiResult result = await PPPeripheralIce.configWifi(
+              domain: "http://120.79.144.170:6032",
+              ssId: ssid,
+              password: password);
+          print('Distribution network results:${result.success}');
         });
       }
       if (title == DeviceMenuType.queryWifiConfig.value) {
-        _updateText('fetchWifiInfo');
-        final ssId = await PPPeripheralIce.fetchWifiInfo().timeout(const Duration(seconds: 5));
-        _updateText('ssId:$ssId');
+        final ssId = await PPPeripheralIce.fetchWifiInfo()
+            .timeout(const Duration(seconds: 5));
+        print('ssId:$ssId');
       }
       if (title == DeviceMenuType.getDeviceInfo.value) {
-        _updateText('fetchDeviceInfo');
-        final device180AModel = await PPPeripheralIce.fetchDeviceInfo().timeout(const Duration(seconds: 5));
-        _updateText('firmwareRevision:${device180AModel?.firmwareRevision} modelNumber:${device180AModel?.modelNumber}');
+        final device180AModel = await PPPeripheralIce.fetchDeviceInfo()
+            .timeout(const Duration(seconds: 5));
+        print(
+            'firmwareRevision:${device180AModel?.firmwareRevision} modelNumber:${device180AModel?.modelNumber}');
       }
       if (title == DeviceMenuType.restoreFactory.value) {
-        _updateText('resetDevice');
         PPPeripheralIce.resetDevice();
       }
       if (title == DeviceMenuType.turnOnHeartRate.value) {
-        _updateText('heartRateSwitchControl - open');
-        final ret = await PPPeripheralIce.heartRateSwitchControl(true);
-        _updateText('heartRateSwitchControl return:$ret');
+        await PPPeripheralIce.heartRateSwitchControl(true);
       }
       if (title == DeviceMenuType.turnOffHeartRate.value) {
-        _updateText('heartRateSwitchControl - close');
-        final ret = await PPPeripheralIce.heartRateSwitchControl(false);
-        _updateText('heartRateSwitchControl return:$ret');
+        await PPPeripheralIce.heartRateSwitchControl(false);
       }
       if (title == DeviceMenuType.getHeartRateSW.value) {
-        _updateText('fetchHeartRateSwitch');
         final ret = await PPPeripheralIce.fetchHeartRateSwitch();
-        _updateText('fetchHeartRateSwitch return:$ret');
+        print('fetchHeartRateSwitch return:$ret');
       }
       if (title == DeviceMenuType.turnOnImpedance.value) {
-        _updateText('impedanceSwitchControl - open');
-        final ret = await PPPeripheralIce.impedanceSwitchControl(true);
-        _updateText('impedanceSwitchControl return:$ret');
+        await PPPeripheralIce.impedanceSwitchControl(true);
       }
       if (title == DeviceMenuType.turnOffImpedance.value) {
-        _updateText('impedanceSwitchControl - close');
-        final ret = await PPPeripheralIce.impedanceSwitchControl(false);
-        _updateText('impedanceSwitchControl return:$ret');
+        await PPPeripheralIce.impedanceSwitchControl(false);
       }
       if (title == DeviceMenuType.getImpedanceSW.value) {
-        _updateText('fetchImpedanceSwitch');
         final ret = await PPPeripheralIce.fetchImpedanceSwitch();
-        _updateText('fetchImpedanceSwitch return:$ret');
+        print('fetchImpedanceSwitch return:$ret');
       }
       if (title == DeviceMenuType.syncDeviceLog.value) {
-        _updateText('syncDeviceLog');
         final directory = await getApplicationDocumentsDirectory();
-        final logDirectory = '$directory/DeviceLog';
-        PPPeripheralIce.syncDeviceLog(logDirectory, callBack: (progress, isFailed, filePath) {
-          _updateText('sync log-isFailed:$isFailed filePath:$filePath');
-        });
-
+        final logDirectory = '${directory.path}/DeviceLog';
+        PPPeripheralIce.syncDeviceLog(logDirectory,
+            callBack: (progress, isFailed, filePath) {
+              print('sync log-isFailed:$isFailed filePath:$filePath');
+            });
       }
       if (title == DeviceMenuType.userOTA.value) {
-        _updateText('wifiOTA');
-        final ret = await PPPeripheralIce.wifiOTA();
-        _updateText('wifiOTA return:$ret');
+        await PPPeripheralIce.wifiOTA();
       }
-
-
     } on TimeoutException catch (e) {
-      final msg = 'TimeoutException:$e';
-      print(msg);
-      _updateText(msg);
-    } catch(e) {
-      final msg = 'Exception:$e';
-      print(msg);
-      _updateText(msg);
+      print('TimeoutException:$e');
+    } catch (e) {
+      print('Exception:$e');
     }
   }
 
-
-  void _updateText(String text) {
-    _dynamicText = _dynamicText + '\n$text';
-    if (mounted) {
-      setState(() {});
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  void _showWifiInputDialog(BuildContext context, Function(String ssid, String password) callBack) {
+  void _showWifiInputDialog(
+      BuildContext context, Function(String ssid, String password) callBack) {
     final TextEditingController _ssidController = TextEditingController();
     final TextEditingController _passwordController = TextEditingController();
 
@@ -291,7 +234,7 @@ class _DeviceIceState extends State<DeviceIce> {
                   Expanded(
                     child: TextField(
                       controller: _passwordController,
-                      obscureText: false, // 明文显示
+                      obscureText: false,
                       decoration: const InputDecoration(
                         hintText: 'Enter the Wi-Fi password',
                         border: OutlineInputBorder(),
@@ -322,15 +265,43 @@ class _DeviceIceState extends State<DeviceIce> {
     );
   }
 
-
   @override
   void dispose() {
     _gridController.dispose();
-    _scrollController.dispose();
     PPBluetoothKitManager.stopScan();
     PPBluetoothKitManager.disconnect();
     _timer?.cancel();
     super.dispose();
+  }
+
+  Widget buildMetricCard(String title, String value) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(color: Colors.white60, fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -338,15 +309,14 @@ class _DeviceIceState extends State<DeviceIce> {
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        title: const Text("SAUYT"),
+        title: const Text("SMART SCALE"),
         backgroundColor: Colors.black,
         elevation: 0,
       ),
       body: Column(
         children: [
-
           const SizedBox(height: 20),
-          // ⚖️ ВЕС (главный блок)
+          // ⚖️ WEIGHT BLOCK
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16),
             padding: const EdgeInsets.all(24),
@@ -365,17 +335,14 @@ class _DeviceIceState extends State<DeviceIce> {
             child: Column(
               children: [
                 const Text(
-                  "Weight",
+                  "Current Weight",
                   style: TextStyle(color: Colors.white70),
                 ),
-
                 const SizedBox(height: 10),
-
-                // 🔥 АНИМАЦИЯ ВЕСА
                 TweenAnimationBuilder(
-                  tween: Tween(begin: 0.0, end: _weightValue ?? 0),
+                  tween: Tween(begin: 0.0, end: _weightValue),
                   duration: const Duration(milliseconds: 500),
-                  builder: (_, value, __) {
+                  builder: (_, double value, __) {
                     return Text(
                       "${value.toStringAsFixed(1)} kg",
                       style: const TextStyle(
@@ -386,18 +353,14 @@ class _DeviceIceState extends State<DeviceIce> {
                     );
                   },
                 ),
-
                 const SizedBox(height: 10),
-
                 Text(
                   _connectionStatus == PPDeviceConnectionState.connected
                       ? "Connected"
                       : "Disconnected",
                   style: const TextStyle(color: Colors.white70),
                 ),
-
                 const SizedBox(height: 4),
-
                 Text(
                   _measurementStateStr,
                   style: const TextStyle(color: Colors.white70),
@@ -408,75 +371,61 @@ class _DeviceIceState extends State<DeviceIce> {
 
           const SizedBox(height: 20),
 
-          // 📊 ДАННЫЕ (вместо длинного текста)
+          // 📊 METRICS GRID
           Expanded(
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Scrollbar(
-                controller: _scrollController,
-                child: SingleChildScrollView(
-                  controller: _scrollController,
-                  child: Text(
-                    _dynamicText,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
-                  ),
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: (_bodyData == null && _weightValue == 0)
+                  ? Center(
+                child: Text(
+                  _isScanningOrConnecting()
+                      ? "Measuring..."
+                      : "Waiting for measurement",
+                  style: const TextStyle(color: Colors.white54),
                 ),
+              )
+                  : GridView.count(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 1.5,
+                children: [
+                  buildMetricCard("Body Fat", "${_getValue("bodyFat") ?? '--'} %"),
+                  buildMetricCard("Water", "${_getValue("water") ?? '--'} %"),
+                  buildMetricCard("Muscle", "${_getValue("muscle") ?? '--'} %"),
+                  buildMetricCard("Visceral Fat", "${_getValue("visceralFat") ?? '--'}"),
+                  buildMetricCard("BMI", "${_getValue("bmi") ?? '--'}"),
+                  buildMetricCard("Heart Rate", "${_getValue("heartRate") ?? '--'} bpm"),
+                ],
               ),
             ),
           ),
 
-          const SizedBox(height: 10),
-
-          // ⚙️ КНОПКИ (grid)
+          // ⚙️ SETTINGS BUTTONS
           Expanded(
+            flex: 1,
             child: Container(
               margin: const EdgeInsets.all(16),
               child: GridView.builder(
                 controller: _gridController,
-                gridDelegate:
-                const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2, // 🔥 было 4 → стало удобнее
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
                 ),
                 itemCount: _gridItems.length,
                 itemBuilder: (context, index) {
                   final model = _gridItems[index];
-
                   return GestureDetector(
-                    onTap: () {
-                      _handle(model.title);
-                    },
+                    onTap: () => _handle(model.title),
                     child: Container(
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(12),
                         color: Colors.white.withOpacity(0.05),
-                        border: Border.all(
-                          color: accent.withOpacity(0.3),
-                        ),
                       ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.settings, color: accent),
-                          const SizedBox(height: 10),
-                          Text(
-                            model.title,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
+                      child: const Center(
+                        child: Icon(Icons.settings, color: Colors.white30, size: 20),
                       ),
                     ),
                   );
@@ -487,5 +436,10 @@ class _DeviceIceState extends State<DeviceIce> {
         ],
       ),
     );
+  }
+
+  bool _isScanningOrConnecting() {
+    return _connectionStatus != PPDeviceConnectionState.connected ||
+        _measurementStateStr.contains("measuring");
   }
 }
